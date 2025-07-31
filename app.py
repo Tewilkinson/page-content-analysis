@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import json
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import pandas as pd
 
 # -- Helper functions --
 def fetch_page(url):
@@ -17,7 +18,6 @@ def parse_html(html):
 
 
 def extract_body(soup):
-    # Try to get <article> or fallback to <body>
     return soup.find('article') or soup.find('body')
 
 
@@ -30,7 +30,8 @@ def count_sections(body):
 
 
 def find_author(soup):
-    meta = soup.find('meta', attrs={'name': 'author'}) or soup.find('meta', attrs={'property': 'article:author'})
+    meta = (soup.find('meta', attrs={'name': 'author'}) or
+            soup.find('meta', attrs={'property': 'article:author'}))
     if meta and meta.get('content'):
         return meta['content']
     for tag in soup.find_all('script', type='application/ld+json'):
@@ -94,9 +95,10 @@ def main():
             st.markdown(f"- **Links found:** {len(links)}")
 
             if links:
-                # Use sidebar dropdown so it opens downward
-                selected = st.sidebar.selectbox("Select a link:", options=links)
-                st.sidebar.markdown(f"[Go to selected link]({selected})")
+                # Display links in a table
+                st.subheader("Extracted Links Table")
+                df = pd.DataFrame({'URL': links})
+                st.table(df)
 
         except requests.HTTPError as e:
             st.error(f"Failed to fetch page: {e}")
