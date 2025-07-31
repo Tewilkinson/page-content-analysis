@@ -52,7 +52,7 @@ def find_author(soup):
 def extract_links(body):
     links = []
     # Consider links within paragraph, list item, and div tags that contain a slash
-    containers = body.find_all(['p', 'li', 'div'])
+    containers = body.find_all(['<p', '<li', '<div'])
     for container in containers:
         for a in container.find_all('a', href=True):
             href = a['href'].strip()
