@@ -68,42 +68,47 @@ def compute_relevancy(text, title, keyword):
 # -- Streamlit app --
 def main():
     st.title("Article Analyzer")
-    url = st.text_input("Enter article URL:")
-    keyword = st.text_input("Enter keyword for relevancy scoring:")
+    st.markdown("Enter one or more URLs (one per line) and a keyword to batch-analyze articles.")
 
-    if url:
-        try:
-            html = fetch_page(url)
-            soup = parse_html(html)
-            body = extract_body(soup)
+    url_list_input = st.text_area("Article URLs (one per line):")
+    keyword = st.text_input("Keyword for relevancy scoring:")
 
-            # Extract metrics
-            text = ' '.join(get_paragraph_texts(body))
-            length = len(text.split())
-            title = soup.title.string if soup.title else ''
-            score = compute_relevancy(text, title, keyword) if keyword else None
-            sections = count_sections(body)
-            author = find_author(soup) or 'Not found'
-            links = extract_links(body)
+    urls = [u.strip() for u in url_list_input.splitlines() if u.strip()]
+    if urls and keyword:
+        results = []
+        for url in urls:
+            try:
+                html = fetch_page(url)
+                soup = parse_html(html)
+                body = extract_body(soup)
+                paragraphs = get_paragraph_texts(body)
+                text = ' '.join(paragraphs)
+                word_count = len(text.split())
+                title = soup.title.string if soup.title else ''
+                relevancy = compute_relevancy(text, title, keyword)
+                sections = count_sections(body)
+                author = find_author(soup)
+                has_author = bool(author)
+                results.append({
+                    'URL': url,
+                    'Word Count': word_count,
+                    'Relevancy': round(relevancy, 3),
+                    'Sections': sections,
+                    'Author Present': has_author
+                })
+            except Exception as e:
+                results.append({
+                    'URL': url,
+                    'Word Count': None,
+                    'Relevancy': None,
+                    'Sections': None,
+                    'Author Present': None,
+                    'Error': str(e)
+                })
 
-            st.subheader("Results")
-            st.markdown(f"- **Word count:** {length}")
-            if score is not None:
-                st.markdown(f"- **Relevancy score:** {score:.3f}")
-            st.markdown(f"- **Section headers:** {sections}")
-            st.markdown(f"- **Author:** {author}")
-            st.markdown(f"- **Links found:** {len(links)}")
-
-            if links:
-                # Display links in a table
-                st.subheader("Extracted Links Table")
-                df = pd.DataFrame({'URL': links})
-                st.table(df)
-
-        except requests.HTTPError as e:
-            st.error(f"Failed to fetch page: {e}")
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
+        df = pd.DataFrame(results)
+        st.subheader("Batch Analysis Results")
+        st.dataframe(df)
 
 if __name__ == '__main__':
     main()
