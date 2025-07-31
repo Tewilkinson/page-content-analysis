@@ -50,20 +50,21 @@ def find_author(soup):
 
 
 def extract_links(body):
-    links = []
-    # Count each anchor href with at least one slash, skipping nav/footer and in-page anchors
+    # Collect unique href values containing a '/' but skip in-page anchors and nav/footer links
+    links_set = set()
     for a in body.find_all('a', href=True):
-        href = a['href'].strip()
         # Skip links inside nav or footer
         if a.find_parent(['nav', 'footer']):
             continue
-        # Skip fragment-only anchors
+        href = a['href'].strip()
+        # Skip in-page anchors
         if href.startswith('#'):
             continue
-        # Only count hrefs that contain a slash
+        # Include only if there's at least one slash indicating a path or URL
         if '/' in href:
-            links.append(href)
-    return links
+            links_set.add(href)
+    # Return a list of unique links
+    return list(links_set)
 
 
 def compute_relevancy(text, title, keyword):
