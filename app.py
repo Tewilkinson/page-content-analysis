@@ -51,15 +51,15 @@ def find_author(soup):
 
 def extract_links(body):
     links = []
-    # Only consider links within paragraph tags that include 'https://'
+    # Only consider links within paragraph tags that contain a slash indicating a path or URL
     for p in body.find_all('p'):
         for a in p.find_all('a', href=True):
             href = a['href'].strip()
             # Exclude in-page anchors
             if href.startswith('#'):
                 continue
-            # Only include links that contain 'https://'
-            if 'https://' in href:
+            # Include any link with a slash (path or URL)
+            if '/' in href:
                 links.append(href)
     return links
 
