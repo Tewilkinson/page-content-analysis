@@ -50,21 +50,19 @@ def find_author(soup):
 
 
 def extract_links(body):
-    links_set = set()
-    # Only consider links in <p>, <li>, or <div>, skip nav/footer, detect any href with a '/'
-    for container in body.find_all(['p', 'li', 'div']):
-        if container.find_parent(['nav', 'footer']):
+    links = []
+    # Count each anchor href with at least one slash, skipping nav/footer and in-page anchors
+    for a in body.find_all('a', href=True):
+        href = a['href'].strip()
+        # Skip links inside nav or footer
+        if a.find_parent(['nav', 'footer']):
             continue
-        for a in container.find_all('a', href=True):
-            href = a['href'].strip()
-            # Skip in-page anchors
-            if href.startswith('#'):
-                continue
-            # Only include if there's a slash indicating a path or URL
-            if '/' in href:
-                links_set.add(href)
-    # Convert to list preserving insertion order
-    links = list(links_set)
+        # Skip fragment-only anchors
+        if href.startswith('#'):
+            continue
+        # Only count hrefs that contain a slash
+        if '/' in href:
+            links.append(href)
     return links
 
 
