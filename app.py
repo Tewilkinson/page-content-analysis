@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import json
+from urllib.parse import urlparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
@@ -26,7 +27,7 @@ def get_paragraph_texts(body):
 
 
 def count_sections(body):
-    return len(body.find_all(['h1','h2','h3','h4','h5','h6']))
+    return len(body.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']))
 
 
 def find_author(soup):
@@ -54,7 +55,7 @@ def extract_links(body):
         href = a['href'].strip()
         if a.find_parent(['nav', 'footer']):
             continue
-        if href.startswith('http://') or href.startswith('https://'):
+        if href.startswith(('http://', 'https://')):
             links.append(href)
     return links
 
@@ -68,47 +69,79 @@ def compute_relevancy(text, title, keyword):
 # -- Streamlit app --
 def main():
     st.title("Article Analyzer")
-    st.markdown("Enter one or more URLs (one per line) and a keyword to batch-analyze articles.")
+    # Sidebar controls
+    st.sidebar.header("Controls")
+    st.sidebar.markdown("Enter URLs (one per line), a keyword, and adjust weights for the overall score.")
+    urls_input = st.sidebar.text_area("Article URLs (one per line):")
+    keyword = st.sidebar.text_input("Keyword for relevancy scoring:")
+    # Weight sliders
+    st.sidebar.subheader("Score Weights")
+    w_relevancy = st.sidebar.slider("Relevancy weight", 0.0, 1.0, 0.4, 0.05)
+    w_wordcount = st.sidebar.slider("Word Count weight", 0.0, 1.0, 0.2, 0.05)
+    w_links = st.sidebar.slider("Outbound Links weight", 0.0, 1.0, 0.2, 0.05)
+    w_sections = st.sidebar.slider("Sections weight", 0.0, 1.0, 0.1, 0.05)
+    w_author = st.sidebar.slider("Author Present weight", 0.0, 1.0, 0.1, 0.05)
+    # Normalize weight sum
+    total = w_relevancy + w_wordcount + w_links + w_sections + w_author
+    if total > 0:
+        w_relevancy /= total
+        w_wordcount /= total
+        w_links /= total
+        w_sections /= total
+        w_author /= total
 
-    url_list_input = st.text_area("Article URLs (one per line):")
-    keyword = st.text_input("Keyword for relevancy scoring:")
-
-    urls = [u.strip() for u in url_list_input.splitlines() if u.strip()]
+    urls = [u.strip() for u in urls_input.splitlines() if u.strip()]
     if urls and keyword:
         results = []
         for url in urls:
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace('www.', '')
             try:
                 html = fetch_page(url)
                 soup = parse_html(html)
                 body = extract_body(soup)
-                paragraphs = get_paragraph_texts(body)
-                text = ' '.join(paragraphs)
+                text = ' '.join(get_paragraph_texts(body))
+                # Metrics
                 word_count = len(text.split())
                 title = soup.title.string if soup.title else ''
                 relevancy = compute_relevancy(text, title, keyword)
                 sections = count_sections(body)
-                author = find_author(soup)
-                has_author = bool(author)
+                has_author = int(bool(find_author(soup)))
+                outbound_links = len(extract_links(body))
                 results.append({
+                    'Domain': domain,
                     'URL': url,
                     'Word Count': word_count,
-                    'Relevancy': round(relevancy, 3),
+                    'Relevancy': relevancy,
                     'Sections': sections,
-                    'Author Present': has_author
+                    'Author Present': has_author,
+                    'Outbound Links': outbound_links
                 })
             except Exception as e:
-                results.append({
-                    'URL': url,
-                    'Word Count': None,
-                    'Relevancy': None,
-                    'Sections': None,
-                    'Author Present': None,
-                    'Error': str(e)
-                })
-
+                results.append({'Domain': domain, 'URL': url, 'Error': str(e)})
         df = pd.DataFrame(results)
+        # Compute overall score
+        df_clean = df.dropna(subset=['Word Count', 'Relevancy', 'Sections', 'Author Present', 'Outbound Links'])
+        if not df_clean.empty:
+            df_norm = df_clean.copy()
+            df_norm['Word Count'] /= df_norm['Word Count'].max()
+            df_norm['Sections'] /= df_norm['Sections'].max()
+            df_norm['Outbound Links'] /= df_norm['Outbound Links'].max()
+            df_norm['Overall Score'] = (
+                df_norm['Relevancy'] * w_relevancy +
+                df_norm['Word Count'] * w_wordcount +
+                df_norm['Outbound Links'] * w_links +
+                df_norm['Sections'] * w_sections +
+                df_norm['Author Present'] * w_author
+            )
+            df = df.merge(df_norm[['URL', 'Overall Score']], on='URL', how='left')
+        # Display
         st.subheader("Batch Analysis Results")
         st.dataframe(df)
+        if 'Overall Score' in df and df['Overall Score'].notnull().any():
+            st.subheader("Overall Score by Domain")
+            chart = df.dropna(subset=['Overall Score']).groupby('Domain')['Overall Score'].mean()
+            st.bar_chart(chart)
 
 if __name__ == '__main__':
     main()
