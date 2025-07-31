@@ -18,14 +18,12 @@ def parse_html(html):
 
 def extract_body(soup):
     # Try to get <article> or fallback to <body>
-    body = soup.find('article') or soup.find('body')
-    return body
+    return soup.find('article') or soup.find('body')
 
 
 def get_paragraph_texts(body):
     ps = body.find_all('p')
-    texts = [p.get_text(strip=True) for p in ps]
-    return texts
+    return [p.get_text(strip=True) for p in ps]
 
 
 def count_sections(body):
@@ -35,7 +33,8 @@ def count_sections(body):
 
 def find_author(soup):
     # Check meta tags
-    meta_author = soup.find('meta', attrs={'name': 'author'}) or soup.find('meta', attrs={'property': 'article:author'})
+    meta_author = (soup.find('meta', attrs={'name': 'author'}) or 
+                   soup.find('meta', attrs={'property': 'article:author'}))
     if meta_author and meta_author.get('content'):
         return meta_author['content']
     # Check JSON-LD for author
@@ -46,19 +45,22 @@ def find_author(soup):
                 author = data['author']
                 if isinstance(author, dict) and 'name' in author:
                     return author['name']
-                elif isinstance(author, str):
+                if isinstance(author, str):
                     return author
         except json.JSONDecodeError:
             continue
     # Heuristic: look for rel=author
     a_author = soup.find('a', rel='author')
-    if a_author:
-        return a_author.get_text(strip=True)
-    return None
+    return a_author.get_text(strip=True) if a_author else None
 
 
 def extract_links(body):
-    links = [a['href'] for a in body.find_all('a', href=True)]
+    links = []
+    # Exclude links inside <nav> or <footer>
+    for a in body.find_all('a', href=True):
+        if a.find_parent(['nav', 'footer']):
+            continue
+        links.append(a['href'])
     return links
 
 
@@ -66,8 +68,7 @@ def compute_relevancy(text, title, keyword):
     docs = [keyword, title + ' ' + text]
     vectorizer = TfidfVectorizer().fit(docs)
     tfidf = vectorizer.transform(docs)
-    score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
-    return score
+    return cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
 
 # -- Streamlit app --
 
@@ -88,9 +89,7 @@ def main():
             article_length = len(full_text.split())
 
             title_tag = soup.title.string if soup.title else ''
-            relevancy = None
-            if keyword:
-                relevancy = compute_relevancy(full_text, title_tag, keyword)
+            relevancy = compute_relevancy(full_text, title_tag, keyword) if keyword else None
 
             section_count = count_sections(body)
             author = find_author(soup)
