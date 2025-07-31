@@ -7,7 +7,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 # -- Helper functions --
 def fetch_page(url):
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     response.raise_for_status()
     return response.text
 
@@ -56,11 +56,15 @@ def find_author(soup):
 
 def extract_links(body):
     links = []
-    # Exclude links inside <nav> or <footer>
+    # Exclude links inside <nav> or <footer> and filter only absolute URLs
     for a in body.find_all('a', href=True):
+        href = a['href']
+        # skip nav/footer links
         if a.find_parent(['nav', 'footer']):
             continue
-        links.append(a['href'])
+        # only include HTTP/HTTPS URLs
+        if href.startswith('http://') or href.startswith('https://'):
+            links.append(href)
     return links
 
 
@@ -104,9 +108,10 @@ def main():
             st.write(f"**Author:** {author or 'Not found'}")
             st.write(f"**Links in body:** {len(links)}")
 
-            if st.expander("Show extracted links"):
-                for link in links:
-                    st.markdown(f"- {link}")
+            if links:
+                # Replace expander with a selectbox dropdown for URLs
+                selected = st.selectbox("Select a link to view", options=links)
+                st.markdown(f"[Navigate to selected link]({selected})")
 
         except requests.HTTPError as e:
             st.error(f"Failed to fetch page: {e}")
