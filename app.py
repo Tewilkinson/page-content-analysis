@@ -8,11 +8,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 
 # Optionally use Playwright for JS rendering
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
 
 # -- Helper functions --
 def fetch_page(url, use_js=False):
-    if use_js:
+    # Fetch page with optional JS rendering
+    if use_js and PLAYWRIGHT_AVAILABLE:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
@@ -20,10 +25,12 @@ def fetch_page(url, use_js=False):
             content = page.content()
             browser.close()
             return content
-    else:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        return response.text
+    if use_js and not PLAYWRIGHT_AVAILABLE:
+        st.sidebar.warning("Playwright not installed; using static fetch instead.")
+    # Static fetch
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    return response.text
 
 
 def parse_html(html):
@@ -111,8 +118,14 @@ def main():
         w_sections /= total
         w_author /= total
 
-    urls = [u.strip() for u in urls_input.splitlines() if u.strip()]
-    if urls and keyword:
+    # Run analysis button
+    run_analysis = st.sidebar.button("Run Analysis")
+
+    if run_analysis:
+        urls = [u.strip() for u in urls_input.splitlines() if u.strip()]
+        if not urls or not keyword:
+            st.sidebar.error("Please provide both URLs and a keyword before running analysis.")
+            return
         results = []
         for url in urls:
             parsed = urlparse(url)
@@ -165,4 +178,6 @@ def main():
             st.bar_chart(chart)
 
 if __name__ == '__main__':
+    main()
+
     main()
