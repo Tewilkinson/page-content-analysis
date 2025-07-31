@@ -51,12 +51,15 @@ def find_author(soup):
 
 def extract_links(body):
     links = []
-    for a in body.find_all('a', href=True):
-        href = a['href'].strip()
-        if a.find_parent(['nav', 'footer']):
-            continue
-        if href.startswith(('http://', 'https://')):
-            links.append(href)
+    # Only consider links within paragraph tags
+    for p in body.find_all('p'):
+        for a in p.find_all('a', href=True):
+            href = a['href'].strip()
+            # Exclude nav/footer context
+            if a.find_parent(['nav', 'footer']):
+                continue
+            if href.startswith(('http://', 'https://')):
+                links.append(href)
     return links
 
 
