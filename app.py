@@ -7,11 +7,23 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 
+# Optionally use Playwright for JS rendering
+from playwright.sync_api import sync_playwright
+
 # -- Helper functions --
-def fetch_page(url):
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    return response.text
+def fetch_page(url, use_js=False):
+    if use_js:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=30000)
+            content = page.content()
+            browser.close()
+            return content
+    else:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.text
 
 
 def parse_html(html):
@@ -50,8 +62,8 @@ def find_author(soup):
 
 
 def extract_links(body):
-    # Collect unique href values containing a '/' but skip in-page anchors and nav/footer links
-    links_set = set()
+    links = set()
+    # Collect unique external or file links: must contain a '.' indicating a domain or file extension
     for a in body.find_all('a', href=True):
         # Skip links inside nav or footer
         if a.find_parent(['nav', 'footer']):
@@ -60,11 +72,10 @@ def extract_links(body):
         # Skip in-page anchors
         if href.startswith('#'):
             continue
-        # Include only if there's at least one slash indicating a path or URL
-        if '/' in href:
-            links_set.add(href)
-    # Return a list of unique links
-    return list(links_set)
+        # Only include hrefs with a dot (e.g., domain.com/page or file.pdf)
+        if '.' in href:
+            links.add(href)
+    return list(links)
 
 
 def compute_relevancy(text, title, keyword):
@@ -78,9 +89,12 @@ def main():
     st.title("Article Analyzer")
     # Sidebar controls
     st.sidebar.header("Controls")
-    st.sidebar.markdown("Enter URLs (one per line), a keyword, and adjust weights for the overall score.")
+    st.sidebar.markdown(
+        "Enter URLs (one per line), a keyword, adjust weights, and optionally enable JS rendering for dynamic pages."
+    )
     urls_input = st.sidebar.text_area("Article URLs (one per line):")
     keyword = st.sidebar.text_input("Keyword for relevancy scoring:")
+    use_js = st.sidebar.checkbox("Enable JavaScript rendering (slow)", value=False)
     # Weight sliders
     st.sidebar.subheader("Score Weights")
     w_relevancy = st.sidebar.slider("Relevancy weight", 0.0, 1.0, 0.4, 0.05)
@@ -104,7 +118,7 @@ def main():
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
             try:
-                html = fetch_page(url)
+                html = fetch_page(url, use_js=use_js)
                 soup = parse_html(html)
                 body = extract_body(soup)
                 text = ' '.join(get_paragraph_texts(body))
