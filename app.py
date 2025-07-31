@@ -38,7 +38,17 @@ def parse_html(html):
 
 
 def extract_body(soup):
-    return soup.find('article') or soup.find('body')
+    # Prefer <main>, then <article>, then [role="main"], then <body>
+    main = soup.find('main')
+    if main:
+        return main
+    article = soup.find('article')
+    if article:
+        return article
+    role_main = soup.find(attrs={'role': 'main'})
+    if role_main:
+        return role_main
+    return soup.find('body')
 
 
 def get_paragraph_texts(body):
